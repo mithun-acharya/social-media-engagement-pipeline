@@ -1,0 +1,3 @@
+# we can move using Sqoop comand from mysql. i faced some issues while using sqoop so i upload the file in itversity and used HDFS PUT command to load the file
+
+!hdfs dfs -put -f /home/itv021368/social_media_data.csv /tmp/Mithun_project1 
