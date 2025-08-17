@@ -1,0 +1,73 @@
+from pyspark.sql import SparkSession
+import getpass
+
+# Set username
+username = "******"
+
+# Create Spark Session with Hive support
+spark = SparkSession \
+    .builder \
+    .appName(f"{username} | Load CSV to Hive") \
+    .master("yarn") \
+    .config("spark.sql.warehouse.dir", f"/user/{username}/warehouse") \
+    .enableHiveSupport() \
+    .getOrCreate()
+
+# -----------------------------
+# Step 1: Create Database & Table
+# -----------------------------
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {username}")
+spark.sql(f"USE {username}")
+
+# ✅ Fixed: Removed extra comma in CREATE TABLE
+spark.sql("""
+    CREATE TABLE IF NOT EXISTS project1 (
+        post_id String, user_id String,post_date Date, likes INT, shares INT, comments INT,
+       platform String
+    )
+    USING hive
+""")
+print("✅ Table tbl_banking_trans created.")
+
+# -----------------------------
+# Step 2: Read CSV into DataFrame
+# -----------------------------
+# Adjust path: use 'file://' for local file (only works if file is on driver node)
+csv_path = "/tmp/Mithun_project1/social_media_data.csv"
+
+# Read CSV with schema inference and date parsing
+df = spark.read.option("header", "true").option("inferSchema", "false").option("dateFormat", "yyyy-MM-dd").csv(csv_path)
+
+# Optional: Print schema to verify
+df.printSchema()
+
+# -----------------------------
+# Step 3: Ensure schema matches the Hive table
+# -----------------------------
+from pyspark.sql.functions import col, to_date
+
+# Cast columns to match the target table schema
+df_clean = df.select(
+    col("post_id").cast("String"),
+    col("user_id").cast("string"),
+    to_date(col("post_date"), "yyyy-MM-dd"),  # or your format
+    col("likes").cast("Int"),
+    col("shares").cast("Int"),
+    col("comments").cast("Int"),
+    col("platform").cast("string"),
+)
+
+# -----------------------------
+# Step 4: Insert into Hive Table
+# -----------------------------
+df_clean.write.mode("append").insertInto(f"{username}.project1")
+print("✅ Data inserted into project1")
+
+# -----------------------------
+# Step 5: Verify
+# -----------------------------
+print("📌 Sample data:")
+spark.sql(f"SELECT * FROM {username}.project1 LIMIT 10").show(truncate=False)
+
+print("📌 Total record count:")
+spark.sql(f"SELECT COUNT(*) AS total_records FROM {username}.project1").show()
